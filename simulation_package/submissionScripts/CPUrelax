@@ -1,0 +1,47 @@
+#!/bin/bash
+
+#SBATCH --account=updalpe
+#SBATCH --job-name=REPLACEME1
+#SBATCH --time=23:59:00
+#SBATCH --nodes=8
+#SBATCH --ntasks=128
+#SBATCH --cpus-per-task=1
+
+source /ssoft/spack/bin/slmodules.sh -r deprecated -v
+
+module purge
+module load gromacs/5.1.2/intel-15.0.2
+
+# Specify directories here
+FILENAME=REPLACEME2
+IDXNAME=REPLACEME3
+di="init"
+dm="min"
+ne="nvteq"
+de="npteq"
+dr="relax"
+md="md"
+
+echo STARTING AT `date`
+
+# Relax the proteins 
+i=0
+prev_j=12
+j=0
+
+force=1000
+
+sed 's/RSTOPTION/yes/g' $dr/template.$dr | sed 's/GENOPTION/no/g' | sed 's/NSTEPOPTION/500000/g' | sed "s/FCPROT/$force/g" > $dr/$dr$i.mdp
+
+srun -n 1 gmx_mpi grompp -f $dr/$dr$i.mdp -n ff/$IDXNAME.ndx -p $di/$FILENAME.top -c $de/$de$prev_j.tpr -o $dr/$dr$i.tpr -t $de/$de$prev_j.cpt -r $de/$de$prev_j.gro -maxwarn 1
+srun gmx_mpi mdrun -v -deffnm $dr/$dr$i -cpo $dr/$dr$i.cpt -ntomp 1
+
+farray="500 250 100 50 25 0"
+for force in $farray;do
+    i=`expr $i + 1`
+    sed 's/RSTOPTION/yes/g' $dr/template.$dr | sed 's/GENOPTION/no/g' | sed 's/NSTEPOPTION/500000/g' | sed "s/FCPROT/$force/g" > $dr/$dr$i.mdp
+    srun -n 1 gmx_mpi grompp -f $dr/$dr$i.mdp -n ff/$IDXNAME.ndx -p $di/$FILENAME.top -c $dr/$dr$j.tpr -o $dr/$dr$i.tpr -t $dr/$dr$j.cpt -r $de/$de$prev_j.gro -maxwarn 1
+    srun gmx_mpi mdrun -v -deffnm $dr/$dr$i -cpo $dr/$dr$i.cpt -ntomp 1
+    j=$i
+done
+

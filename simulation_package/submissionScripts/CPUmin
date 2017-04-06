@@ -1,0 +1,31 @@
+#!/bin/bash
+
+#SBATCH --account=updalpe
+#SBATCH --job-name=REPLACEME1
+#SBATCH --time=00:59:00
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+
+source /ssoft/spack/bin/slmodules.sh -r deprecated -v
+
+module purge
+module load gromacs/5.1.2/intel-15.0.2
+
+# Specify directories here
+FILENAME=REPLACEME2
+IDXNAME=REPLACEME3
+di="init"
+dm="min"
+ne="nvteq"
+de="npteq"
+dr="relax"
+md="md"
+
+echo STARTING AT `date`
+
+# Minimize the system
+srun gmx_mpi grompp -f $dm/$dm.mdp -n ff/$IDXNAME.ndx -c $di/$FILENAME.gro -p $di/$FILENAME.top -o $dm/$dm.tpr -r $di/$FILENAME.gro
+srun gmx_mpi mdrun -v -deffnm $dm/$dm -ntomp 1
+
+sbatch CPUnvteq

@@ -1,0 +1,19 @@
+#include "../ff/martini_v2.2P.itp"
+
+#define RUBBER_BANDS
+
+#include "../ff/Protein_A.itp"
+#include "../ff/Protein_B.itp"
+#include "../ff/Protein_C.itp"
+#include "../ff/Protein_D.itp"
+#include "../ff/Protein_E.itp"
+#include "../ff/Protein_F.itp"
+#include "../ff/Protein_G.itp"
+#include "../ff/Protein_H.itp"
+#include "../ff/Protein_I.itp"
+#include "../ff/Protein_J.itp"
+#include "../ff/Protein_K.itp"
+
+#include "../ff/martini_v2.0_lipids_all_201506.itp"
+
+#include "../ff/martini_v2.0_ions.itp"

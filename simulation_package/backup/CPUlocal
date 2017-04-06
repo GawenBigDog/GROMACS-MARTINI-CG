@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Specify directories here
+path0="min_sd"
+path1="min_cg"
+path2="nvt_eq"
+#path2="heat"
+#path3="equil"
+
+echo STARTING AT `date`
+
+# Minimize the system
+gmx grompp -f $path0/min.mdp -n ff/lipid.ndx -c init/mff_membrane.gro -p init/mff_membrane.top -o $path0/min.tpr -r init/mff_membrane.gro
+gmx mdrun -v -deffnm $path0/min
+
+gmx grompp -f $path1/min.mdp -n ff/lipid.ndx -c $path0/min.gro -p init/mff_membrane.top -o $path1/min.tpr -t $path0/min.trr -r init/mff_membrane.gro
+gmx mdrun -v -deffnm $path1/min
+
+# NVT Equilibration
+gmx grompp -f $path2/nvt_eq.mdp -n ff/lipid.ndx -c $path1/min.tpr -p init/mff_membrane.top -o $path2/nvt_eq.tpr -t $path1/min.trr -r init/mff_membrane.gro
+gmx mdrun -v -deffnm $path2/nvt_eq -cpo $path2/nvt_eq.cpt
+
+exit
+
+i=0
+j=0
+# Generate restraints on the z-axis to allow lateral movement in the membrane
+sed 's/TEMP/120/g' $path2/heat.template | sed 's/GENOPTION/yes/g' | sed 's/RSTOPTION/no/g' | sed 's/FCX/0/g' | sed 's/FCY/0/g' | sed 's/FCZ/1000/g' > $path2/heat$i.mdp
+# Heat the system starting from 120K to 300K 
+gmx grompp -f $path2/heat$i.mdp -n ff/lipid.ndx -c $path1/min.tpr -p init/mff_membrane.top -o $path2/heat$i.tpr -t $path1/min.trr -r init/mff_membrane.gro
+gmx mdrun -v -deffnm $path2/heat$i -cpo $path2/heat$i.cpt
+
+tarray="150 180 210 240 270 300"
+for kelvin in $tarray;do
+    i=`expr $i + 1`
+    sed 's/TEMP/$kelvin/g' $path2/heat.template | sed 's/GENOPTION/no/g' | sed 's/RSTOPTION/yes/g' | sed 's/FCX/0/g' | sed 's/FCY/0/g' | sed 's/FCZ/1000/g' > $path2/heat$i.mdp
+    gmx grompp -f $path2/heat$i.mdp -n ff/lipid.ndx -c $path2/heat$j.tpr -p init/mff_membrane.top -o $path2/heat$i.tpr -t $path2/heat$j.cpt -r init/mff_membrane.gro
+    gmx mdrun -v -deffnm $path2/heat$i -cpo $path2/heat$i.cpt # -ntomp 6
+    j=$i
+done
+
+i=0
+j=0
+# Generate restraints on the z-axis to allow lateral movement in the membrane 
+sed 's/RSTOPTION/yes/g' $path3/equil.template | sed 's/FCX/0/g' | sed 's/FCY/0/g' | sed 's/FCZ/1000/g' > $path3/equil$i.mdp
+# Equilibrate the system with decreasing constraints
+gmx grompp -f $path3/equil$i.mdp -n ff/lipid.ndx -p init/mff_membrane.top -c $path2/heat6.tpr -o $path3/equil$i.tpr -t $path2/heat6.cpt -r init/mff_membrane.gro
+gmx mdrun -v -deffnm $path3/equil$i -cpo $path3/equil$i.cpt
+
+farray="500 250 100 50 25 0"
+for force in $farray;do
+    i=`expr $i + 1`
+    # Generate restraints that are decreasing with every iteration
+    sed 's/RSTOPTION/yes/g' $path3/equil.template | sed 's/FCX/0/g' | sed 's/FCY/0/g' | sed 's/FCZ/$force/g' > $path3/equil$i.mdp
+    gmx grompp -f $path3/equil$i.mdp -n ff/lipid.ndx -p init/mff_membrane.top -c $path3/equil$j.tpr -o $path3/equil$i.tpr -t $path3/equil$j.cpt -r init/mff_membrane.gro
+    gmx mdrun -v -deffnm $path3/equil$i -cpo $path3/equil$i.cpt # -ntomp 6
+    j=$i
+done
+
+echo FINISHED at `date`

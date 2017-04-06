@@ -1,0 +1,37 @@
+#!/bin/bash
+
+#SBATCH --account=updalpe
+#SBATCH --job-name=REPLACEME1
+#SBATCH --time=23:59:00
+#SBATCH --nodes=8
+#SBATCH --ntasks=128
+#SBATCH --cpus-per-task=1
+
+source /ssoft/spack/bin/slmodules.sh -r deprecated -v
+
+module purge
+module load gromacs/5.1.2/intel-15.0.2
+
+# Specify directories here
+FILENAME=REPLACEME2
+IDXNAME=REPLACEME3
+dr="relax"
+md="md"
+
+echo STARTING AT `date`
+
+# Production run
+nmax=80
+prev=6
+nrun=0
+
+echo STARTING AT `date`
+
+srun -n 1 gmx_mpi grompp -f $md/production.mdp -n ff/$IDXNAME.ndx -p $di/$FILENAME.top -c $dr/$dr$prev.tpr -o $md/$md$nrun.tpr -t $dr/$dr$prev.cpt -maxwarn 1
+srun gmx_mpi mdrun -v -deffnm $md/$md$nrun -cpo $md/$md$nrun.cpt
+
+echo FINISHED at `date`
+
+if [ "$nrun" -lt "$nmax" ]; then
+    ./launcher.sh $nrun
+fi

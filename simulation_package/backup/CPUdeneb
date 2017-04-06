@@ -1,0 +1,87 @@
+#!/bin/bash
+
+# Define the working directory
+#SBATCH --workdir /scratch/lorkowsk/lbm/mff_membrane/simulation_package
+
+##SBATCH --account=phpc2016
+
+# Define the job name
+#SBATCH --job-name=mff
+
+# Define an e-mail address to which sending the updates concerning the jobs. ALL means BEGIN, END, FAIL, REQUEUE
+##SBATCH --mail-user=alexander.lorkowski@epfl.ch
+##SBATCH --mail-type=ALL
+
+# Define the name of the output file. %j and %N can be inserted in the filename, where j is the job ID and N is the main node name. By default, both standard output and standard error are inserted in a file named slurm-%j.out
+#SBATCH --output=mff.out
+
+#SBATCH --time=23:59:00
+
+#SBATCH --nodes 4
+
+# ntasks is the number of processes to launch, while cpus-per-task is the number of threads per process. For an MPI job with 8 processes, ntasks=8 and cpus-per-task=1. For an OpenMP job with 12 threads, ntasks=1 and cpus-per-task=12
+#SBATCH --ntasks 64
+#SBATCH --cpus-per-task 1
+
+#SBATCH --mem 3000
+
+source /ssoft/spack/bin/slmodules.sh -r deprecated -v
+
+module purge
+module load gromacs/5.1.2/intel-15.0.2
+#module load intel/16.0.3  intelmpi/5.1.3
+#module load gromacs/5.1.2-mpi
+
+# Specify directories here
+path0="min_sd"
+path1="min_cg"
+path2="heat"
+path3="equil"
+
+echo STARTING AT `date`
+
+# Minimize the system
+#srun gmx_mpi grompp -f $path0/min.mdp -n ff/lipid.ndx -c init/mff_membrane.gro -p init/mff_membrane.top -o $path0/min.tpr
+#echo "73" | srun -n 1 gmx_mpi genrestr -f $path0/min.tpr -n ff/lipid.ndx -o ff/posre.itp -fc 1000 1000 1000
+#srun gmx_mpi mdrun -v -deffnm $path0/min
+
+#srun gmx_mpi grompp -f $path1/min.mdp -n ff/lipid.ndx -c $path0/min.gro -p init/mff_membrane.top -o $path1/min.tpr -t $path0/min.trr
+#srun gmx_mpi mdrun -v -deffnm $path1/min
+
+# Generate constraints on the z-axis to allow lateral movement in the membrane
+#echo "73" | srun -n 1 gmx_mpi genrestr -f $path1/min.tpr -n ff/lipid.ndx -o ff/posre.itp -fc 0 0 1000
+
+# Heat the system starting from 120K to 300K
+#i=0
+#j=0
+#sed 's/TEMP/120/g' $path2/heat.template > $path2/heat$i.mdp
+#srun gmx_mpi grompp -f $path2/heat$i.mdp -n ff/lipid.ndx -c $path1/min.tpr -p init/mff_membrane.top -o $path2/heat$i.t#pr -t $path1/min.trr
+#srun gmx_mpi mdrun -v -deffnm $path2/heat$i -cpo $path2/heat$i.cpt
+
+#tarray="150 180 210 240 270 300"
+#for kelvin in $tarray;do
+#    i=`expr $i + 1`
+#    sed 's/TEMP/$kelvin/g' $path2/heat.template > $path2/heat$i.mdp
+#    srun gmx_mpi grompp -f $path2/heat$i.mdp -n ff/lipid.ndx -c $path2/heat$j.tpr -p init/mff_membrane.top -o $path2/heat$i.tpr -t $path2/heat$j.cpt
+#    srun gmx_mpi mdrun -v -deffnm $path2/heat$i -cpo $path2/heat$i.cpt -ntomp 6
+#    j=$i
+#done
+
+# Equilibrate the system with decreasing constraints
+i=0
+j=0
+srun gmx_mpi grompp -f $path3/equil.mdp -n ff/lipid.ndx -p init/mff_membrane.top -c $path2/heat6.tpr -o $path3/equil$i.tpr -t $path2/heat6.cpt 
+srun gmx_mpi mdrun -v -deffnm $path3/equil$i -cpo $path3/equil$i.cpt
+
+exit
+
+farray="800 600 400 200 100 0"
+for force in $farray;do
+    i=`expr $i + 1`
+    echo "73" | srun -n 1 gmx_mpi genrestr -f $path1/min.tpr -n ff/lipid.ndx -o ff/posre.itp -fc 0 0 $force
+    srun gmx_mpi grompp -f $path3/equil.mdp -n ff/lipid.ndx -p init/mff_membrane.top -c $path3/equil$j.tpr -o $path3/equil$i.tpr -t $path3/equil$j.cpt
+    srun gmx_mpi mdrun -v -deffnm $path3/equil$i -cpo $path3/equil$i.cpt -ntomp 6
+    j=$i
+done
+
+echo FINISHED at `date`

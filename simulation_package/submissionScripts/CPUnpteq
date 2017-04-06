@@ -1,0 +1,54 @@
+#!/bin/bash
+
+#SBATCH --account=updalpe
+#SBATCH --job-name=REPLACEME1
+#SBATCH --time=23:59:00
+#SBATCH --nodes=8
+#SBATCH --ntasks=128
+#SBATCH --cpus-per-task=1
+
+source /ssoft/spack/bin/slmodules.sh -r deprecated -v
+
+module purge
+module load gromacs/5.1.2/intel-15.0.2
+
+# Specify directories here
+FILENAME=REPLACEME2
+IDXNAME=REPLACEME3
+di="init"
+dm="min"
+ne="nvteq"
+de="npteq"
+dr="relax"
+md="md"
+
+echo STARTING AT `date`
+
+# NPT Equilibration
+i=0
+j=0
+# Generate restraints on the z-axis to allow lateral movement in the membrane 
+sed 's/RSTOPTION/no/g' $de/template.$de | sed 's/GENOPTION/yes/g' | sed 's/NSTEPOPTION/500000/g' | sed 's/FCX/1000/g' | sed 's/FCY/1000/g' | sed 's/FCZ/1000/g' > $de/$de$i.mdp
+
+srun -n 1 gmx_mpi grompp -f $de/$de$i.mdp -n ff/$IDXNAME.ndx -p $di/$FILENAME.top -c $ne/$ne.tpr -o $de/$de$i.tpr -t $ne/$ne.cpt -r $dm/$dm.gro -maxwarn 1
+srun gmx_mpi mdrun -v -deffnm $de/$de$i -cpo $de/$de$i.cpt -ntomp 1
+
+prev_force=1000
+farray="500 250 100 50 25 0"
+for force in $farray;do
+    # Relax restraints on the xy-plane
+    i=`expr $i + 1`
+    sed 's/RSTOPTION/yes/g' $de/template.$de | sed 's/GENOPTION/no/g' | sed 's/NSTEPOPTION/500000/g' | sed "s/FCX/$force/g" | sed "s/FCY/$force/g" | sed "s/FCZ/$prev_force/g" > $de/$de$i.mdp
+    srun -n 1 gmx_mpi grompp -f $de/$de$i.mdp -n ff/$IDXNAME.ndx -p $di/$FILENAME.top -c $de/$de$j.tpr -o $de/$de$i.tpr -t $de/$de$j.cpt -r $de/$de$j.gro -maxwarn 1
+    srun gmx_mpi mdrun -v -deffnm $de/$de$i -cpo $de/$de$i.cpt -ntomp 1
+    j=$i
+    # Relax restraints on the z-plane
+    i=`expr $i + 1`
+    sed 's/RSTOPTION/yes/g' $de/template.$de | sed 's/GENOPTION/no/g' | sed 's/NSTEPOPTION/500000/g' | sed "s/FCX/$force/g" | sed "s/FCY/$force/g" | sed "s/FCZ/$force/g" > $de/$de$i.mdp
+    srun -n 1 gmx_mpi grompp -f $de/$de$i.mdp -n ff/$IDXNAME.ndx -p $di/$FILENAME.top -c $de/$de$j.tpr -o $de/$de$i.tpr -t $de/$de$j.cpt -r $de/$de$j.gro -maxwarn 1
+    srun gmx_mpi mdrun -v -deffnm $de/$de$i -cpo $de/$de$i.cpt -ntomp 1
+    j=$i
+    prev_force=$force
+done
+
+sbatch CPUrelax
