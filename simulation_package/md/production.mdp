@@ -164,7 +164,7 @@ ref-t                    = 323 323 323
 Pcoupl                   = berendsen
 Pcoupltype               = semiisotropic
 nstpcouple               = -1
-tau-p                    = 1.0
+tau-p                    = 5.0
 compressibility          = 3e-4 3e-4 3e-4
 ref-p                    = 1.0 1.0 1.0
 ; Scaling of reference coordinates, No, All or COM
